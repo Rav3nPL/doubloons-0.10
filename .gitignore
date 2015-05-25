@@ -7,6 +7,9 @@ src/litecoin-cli
 src/litecoin-tx
 src/test/test_litecoin
 src/qt/test/test_litecoin-qt
+src/doubloons-cli
+src/doubloons-tx
+src/doubloonsd
 
 # autoreconf
 Makefile.in

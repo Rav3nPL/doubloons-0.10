@@ -11,6 +11,11 @@
 #include "uint256.h"
 #include "util.h"
 
+// Thanks: Balthazar for suggesting the following fix
+// https://bitcointalk.org/index.php?topic=182430.msg1904506#msg1904506
+static int64_t nReTargetHistoryFact = 4; // look at 4 times the retarget
+                                             // interval into the block history
+
 unsigned int GetNextWorkRequired(const CBlockIndex* pindexLast, const CBlockHeader *pblock)
 {
     unsigned int nProofOfWorkLimit = Params().ProofOfWorkLimit().GetCompact();
@@ -18,6 +23,23 @@ unsigned int GetNextWorkRequired(const CBlockIndex* pindexLast, const CBlockHead
     // Genesis block
     if (pindexLast == NULL)
         return nProofOfWorkLimit;
+
+    // DBL From block 150000, reassess the difficulty every 30 blocks instead of the default 720
+    if((pindexLast->nHeight+1) >= 150000)
+    {
+        Params().TargetTimespan()<-30*60;//, Params().TargetTimespan());// = 30 * 60; // 1,800 seconds (30 minutes)
+        Params().TargetSpacing()<-60;// = 60; // 60 seconds (1 minute) 
+        Params().Interval() <-Params().TargetTimespan() / Params().TargetSpacing();// = Params().TargetTimespan() / Params().TargetSpacing(); // 30 blocks
+
+        // Only check 1 retarget interval for the first 4 retargets under the
+        // new rules. After which it will revert to looking back 4 retarget
+        // intervals which will be 120 blocks or approximately the last
+        // 2 hours worth of mining.
+        if((pindexLast->nHeight+1) < 150150)
+        {
+            nReTargetHistoryFact = 1;
+        }
+    }
 
     // Only change once per interval
     if ((pindexLast->nHeight+1) % Params().Interval() != 0)
@@ -46,20 +68,39 @@ unsigned int GetNextWorkRequired(const CBlockIndex* pindexLast, const CBlockHead
     int blockstogoback = Params().Interval()-1;
     if ((pindexLast->nHeight+1) != Params().Interval())
         blockstogoback = Params().Interval();
+     if (pindexLast->nHeight > COINFIX1_BLOCK) {
+        blockstogoback = nReTargetHistoryFact * Params().Interval();
+    }
 
-    // Go back by what we want to be 14 days worth of blocks
+
+    // Go back by what we want to be nReTargetHistoryFact*nInterval blocks
     const CBlockIndex* pindexFirst = pindexLast;
     for (int i = 0; pindexFirst && i < blockstogoback; i++)
         pindexFirst = pindexFirst->pprev;
     assert(pindexFirst);
 
     // Limit adjustment step
-    int64_t nActualTimespan = pindexLast->GetBlockTime() - pindexFirst->GetBlockTime();
+    int64_t nActualTimespan =0;
+     if (pindexLast->nHeight > COINFIX1_BLOCK)
+        // obtain average actual timespan
+        nActualTimespan = (pindexLast->GetBlockTime() - pindexFirst->GetBlockTime())/nReTargetHistoryFact;
+    else
+	nActualTimespan = pindexLast->GetBlockTime() - pindexFirst->GetBlockTime();
     LogPrintf("  nActualTimespan = %d  before bounds\n", nActualTimespan);
+    if((pindexLast->nHeight+1) < 150000) //DBL
+    {
     if (nActualTimespan < Params().TargetTimespan()/4)
         nActualTimespan = Params().TargetTimespan()/4;
     if (nActualTimespan > Params().TargetTimespan()*4)
         nActualTimespan = Params().TargetTimespan()*4;
+    }
+    else
+    {
+    if (nActualTimespan < Params().TargetTimespan()/1.1)
+        nActualTimespan = Params().TargetTimespan()/1.1;
+    if (nActualTimespan > Params().TargetTimespan()*1.1)
+        nActualTimespan = Params().TargetTimespan()*1.1;
+    }
 
     // Retarget
     uint256 bnNew;

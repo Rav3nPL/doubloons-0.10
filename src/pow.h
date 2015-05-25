@@ -12,6 +12,12 @@ class CBlockHeader;
 class CBlockIndex;
 class uint256;
 
+// This fix should give some protection agains sudden
+// changes of the network hashrate.
+// Thanks: https://bitcointalk.org/index.php?topic=182430.msg1904506#msg1904506
+// activated: after block 15000 for all following diff retargeting events
+#define COINFIX1_BLOCK  (15000)
+
 unsigned int GetNextWorkRequired(const CBlockIndex* pindexLast, const CBlockHeader *pblock);
 
 /** Check whether a block hash satisfies the proof-of-work requirement specified by nBits */
