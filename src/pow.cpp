@@ -25,11 +25,15 @@ unsigned int GetNextWorkRequired(const CBlockIndex* pindexLast, const CBlockHead
         return nProofOfWorkLimit;
 
     // DBL From block 150000, reassess the difficulty every 30 blocks instead of the default 720
+    int nTargetTimespan = Params().TargetTimespan();
+    int nTargetSpacing = Params().TargetSpacing();
+    int nInterval = nTargetTimespan / nTargetSpacing;
+
     if((pindexLast->nHeight+1) >= 150000)
     {
-        Params().TargetTimespan()<-30*60;//, Params().TargetTimespan());// = 30 * 60; // 1,800 seconds (30 minutes)
-        Params().TargetSpacing()<-60;// = 60; // 60 seconds (1 minute) 
-        Params().Interval() <-Params().TargetTimespan() / Params().TargetSpacing();// = Params().TargetTimespan() / Params().TargetSpacing(); // 30 blocks
+        nTargetTimespan = 30 * 60; // 1,800 seconds (30 minutes)
+        nTargetSpacing = 60; // 60 seconds (1 minute) 
+        nInterval=nTargetTimespan / nTargetSpacing; // 30 blocks
 
         // Only check 1 retarget interval for the first 4 retargets under the
         // new rules. After which it will revert to looking back 4 retarget
@@ -42,20 +46,20 @@ unsigned int GetNextWorkRequired(const CBlockIndex* pindexLast, const CBlockHead
     }
 
     // Only change once per interval
-    if ((pindexLast->nHeight+1) % Params().Interval() != 0)
+    if ((pindexLast->nHeight+1) % nInterval != 0)
     {
         if (Params().AllowMinDifficultyBlocks())
         {
             // Special difficulty rule for testnet:
             // If the new block's timestamp is more than 2* 10 minutes
             // then allow mining of a min-difficulty block.
-            if (pblock->GetBlockTime() > pindexLast->GetBlockTime() + Params().TargetSpacing()*2)
+            if (pblock->GetBlockTime() > pindexLast->GetBlockTime() + nTargetSpacing*2)
                 return nProofOfWorkLimit;
             else
             {
                 // Return the last non-special-min-difficulty-rules-block
                 const CBlockIndex* pindex = pindexLast;
-                while (pindex->pprev && pindex->nHeight % Params().Interval() != 0 && pindex->nBits == nProofOfWorkLimit)
+                while (pindex->pprev && pindex->nHeight % nInterval != 0 && pindex->nBits == nProofOfWorkLimit)
                     pindex = pindex->pprev;
                 return pindex->nBits;
             }
@@ -65,11 +69,11 @@ unsigned int GetNextWorkRequired(const CBlockIndex* pindexLast, const CBlockHead
 
     // Litecoin: This fixes an issue where a 51% attack can change difficulty at will.
     // Go back the full period unless it's the first retarget after genesis. Code courtesy of Art Forz
-    int blockstogoback = Params().Interval()-1;
-    if ((pindexLast->nHeight+1) != Params().Interval())
-        blockstogoback = Params().Interval();
+    int blockstogoback = nInterval-1;
+    if ((pindexLast->nHeight+1) != nInterval)
+        blockstogoback = nInterval;
      if (pindexLast->nHeight > COINFIX1_BLOCK) {
-        blockstogoback = nReTargetHistoryFact * Params().Interval();
+        blockstogoback = nReTargetHistoryFact * nInterval;
     }
 
 
@@ -89,17 +93,17 @@ unsigned int GetNextWorkRequired(const CBlockIndex* pindexLast, const CBlockHead
     LogPrintf("  nActualTimespan = %d  before bounds\n", nActualTimespan);
     if((pindexLast->nHeight+1) < 150000) //DBL
     {
-    if (nActualTimespan < Params().TargetTimespan()/4)
-        nActualTimespan = Params().TargetTimespan()/4;
-    if (nActualTimespan > Params().TargetTimespan()*4)
-        nActualTimespan = Params().TargetTimespan()*4;
+    if (nActualTimespan < nTargetTimespan/4)
+        nActualTimespan = nTargetTimespan/4;
+    if (nActualTimespan > nTargetTimespan*4)
+        nActualTimespan = nTargetTimespan*4;
     }
     else
     {
-    if (nActualTimespan < Params().TargetTimespan()/1.1)
-        nActualTimespan = Params().TargetTimespan()/1.1;
-    if (nActualTimespan > Params().TargetTimespan()*1.1)
-        nActualTimespan = Params().TargetTimespan()*1.1;
+    if (nActualTimespan < nTargetTimespan/1.1)
+        nActualTimespan = nTargetTimespan/1.1;
+    if (nActualTimespan > nTargetTimespan*1.1)
+        nActualTimespan = nTargetTimespan*1.1;
     }
 
     // Retarget
@@ -112,7 +116,7 @@ unsigned int GetNextWorkRequired(const CBlockIndex* pindexLast, const CBlockHead
     if (fShift)
         bnNew >>= 1;
     bnNew *= nActualTimespan;
-    bnNew /= Params().TargetTimespan();
+    bnNew /= nTargetTimespan;
     if (fShift)
         bnNew <<= 1;
 
@@ -121,7 +125,7 @@ unsigned int GetNextWorkRequired(const CBlockIndex* pindexLast, const CBlockHead
 
     /// debug print
     LogPrintf("GetNextWorkRequired RETARGET\n");
-    LogPrintf("Params().TargetTimespan() = %d    nActualTimespan = %d\n", Params().TargetTimespan(), nActualTimespan);
+    LogPrintf("nTargetTimespan = %d    nActualTimespan = %d\n", nTargetTimespan, nActualTimespan);
     LogPrintf("Before: %08x  %s\n", pindexLast->nBits, bnOld.ToString());
     LogPrintf("After:  %08x  %s\n", bnNew.GetCompact(), bnNew.ToString());
 
